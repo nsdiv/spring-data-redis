@@ -47,6 +47,7 @@ import org.springframework.data.mapping.PreferredConstructor;
 import org.springframework.data.mapping.PropertyHandler;
 import org.springframework.data.mapping.model.PersistentEntityParameterValueProvider;
 import org.springframework.data.mapping.model.PropertyValueProvider;
+import org.springframework.data.redis.core.index.IndexDefinitionProvider;
 import org.springframework.data.redis.core.index.Indexed;
 import org.springframework.data.redis.core.mapping.RedisMappingContext;
 import org.springframework.data.redis.core.mapping.RedisPersistentEntity;
@@ -338,6 +339,10 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 	@Override
 	@SuppressWarnings({ "rawtypes" })
 	public void write(Object source, final RedisData sink) {
+
+		if (source == null) {
+			return;
+		}
 
 		final RedisPersistentEntity entity = mappingContext.getPersistentEntity(source.getClass());
 
@@ -749,6 +754,11 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 	@Override
 	public void afterPropertiesSet() {
 		this.initializeConverters();
+	}
+
+	@Override
+	public IndexDefinitionProvider getIndexDefinitionProvider() {
+		return this.mappingContext.getMappingConfiguration().getIndexConfiguration();
 	}
 
 	private void initializeConverters() {

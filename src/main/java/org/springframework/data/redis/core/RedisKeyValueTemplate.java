@@ -110,6 +110,32 @@ public class RedisKeyValueTemplate extends KeyValueTemplate {
 		});
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * @see org.springframework.data.keyvalue.core.KeyValueTemplate#update(java.lang.Object)
+	 */
+	@Override
+	public void update(Object objectToUpdate) {
+
+		if (objectToUpdate instanceof PartialUpdate) {
+			doPartialUpdate((PartialUpdate<Object>) objectToUpdate);
+		}
+
+		super.update(objectToUpdate);
+	}
+
+	protected <T> T doPartialUpdate(final PartialUpdate<T> update) {
+
+		return execute(new RedisKeyValueCallback<T>() {
+
+			@Override
+			public T doInRedis(RedisKeyValueAdapter adapter) {
+
+				return adapter.update(update);
+			}
+		});
+	}
+
 	/**
 	 * Redis specific {@link KeyValueCallback}.
 	 * 

@@ -20,7 +20,6 @@ import static org.hamcrest.core.IsCollectionContaining.*;
 import static org.junit.Assert.*;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import org.junit.After;
@@ -36,6 +35,8 @@ import org.springframework.data.redis.ConnectionFactoryTracker;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.index.Indexed;
 import org.springframework.data.redis.core.mapping.RedisMappingContext;
 import org.springframework.util.ObjectUtils;
 
@@ -61,7 +62,10 @@ public class RedisKeyValueTemplateTests {
 		JedisConnectionFactory jedis = new JedisConnectionFactory();
 		jedis.afterPropertiesSet();
 
-		return Collections.<RedisConnectionFactory> singletonList(jedis);
+		LettuceConnectionFactory lettuce = new LettuceConnectionFactory();
+		lettuce.afterPropertiesSet();
+
+		return Arrays.<RedisConnectionFactory> asList(jedis, lettuce);
 	}
 
 	@AfterClass
@@ -198,16 +202,130 @@ public class RedisKeyValueTemplateTests {
 		assertThat(result.size(), is(0));
 	}
 
+	@Test
+	public void partialUpdate() {
+
+		final Person rand = new Person();
+		rand.firstname = "rand";
+
+		template.insert(rand);
+
+		PartialUpdate<Person> update = new PartialUpdate<Person>(rand.id, Person.class);
+
+		/*
+		 * Set the lastname and make sure we've an index on it afterwards
+		 */
+		Person update1 = new Person(rand.id, "Rand-Update", "al-thor");
+		update.setValue(update1);
+
+		assertThat(template.doPartialUpdate(update), is(update1));
+
+		nativeTemplate.execute(new RedisCallback<Void>() {
+
+			@Override
+			public Void doInRedis(RedisConnection connection) throws DataAccessException {
+
+				assertThat(connection.exists("template-test-person:lastname:al-thor".getBytes()), is(true));
+				assertThat(connection.sIsMember("template-test-person:lastname:al-thor".getBytes(), rand.id.getBytes()),
+						is(true));
+				return null;
+			}
+		});
+
+		/*
+		 * Set the firstname and make sure lastname index and value is not affected
+		 */
+		update = new PartialUpdate<Person>(rand.id, Person.class);
+		update.set("firstname", "frodo");
+
+		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, "frodo", "al-thor")));
+
+		nativeTemplate.execute(new RedisCallback<Void>() {
+
+			@Override
+			public Void doInRedis(RedisConnection connection) throws DataAccessException {
+
+				assertThat(connection.exists("template-test-person:lastname:al-thor".getBytes()), is(true));
+				assertThat(connection.sIsMember("template-test-person:lastname:al-thor".getBytes(), rand.id.getBytes()),
+						is(true));
+				return null;
+			}
+		});
+
+		/*
+		 * Remote firstname and update lastname. Make sure lastname index is updated
+		 */
+		update = new PartialUpdate<Person>(rand.id, Person.class);
+		update.del("firstname");
+		update.set("lastname", "buggins");
+
+		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, null, "buggins")));
+
+		nativeTemplate.execute(new RedisCallback<Void>() {
+
+			@Override
+			public Void doInRedis(RedisConnection connection) throws DataAccessException {
+
+				assertThat(connection.exists("template-test-person:lastname:al-thor".getBytes()), is(false));
+				assertThat(connection.exists("template-test-person:lastname:buggins".getBytes()), is(true));
+				assertThat(connection.sIsMember("template-test-person:lastname:buggins".getBytes(), rand.id.getBytes()),
+						is(true));
+				return null;
+			}
+		});
+
+		/*
+		 * Remove lastname and make sure the index vanishes 
+		 */
+		update = new PartialUpdate<Person>(rand.id, Person.class);
+		update.del("lastname");
+
+		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, null, null)));
+
+		nativeTemplate.execute(new RedisCallback<Void>() {
+
+			@Override
+			public Void doInRedis(RedisConnection connection) throws DataAccessException {
+
+				assertThat(connection.keys("template-test-person:lastname:*".getBytes()).size(), is(0));
+				return null;
+			}
+		});
+
+	}
+
 	@RedisHash("template-test-person")
 	static class Person {
 
 		@Id String id;
 		String firstname;
+		@Indexed String lastname;
+		Integer age;
+
+		public Person() {}
+
+		public Person(String firstname, String lastname) {
+			this(null, firstname, lastname, null);
+		}
+
+		public Person(String id, String firstname, String lastname) {
+			this(id, firstname, lastname, null);
+		}
+
+		public Person(String id, String firstname, String lastname, Integer age) {
+
+			this.id = id;
+			this.firstname = firstname;
+			this.lastname = lastname;
+			this.age = age;
+		}
 
 		@Override
 		public int hashCode() {
 
 			int result = ObjectUtils.nullSafeHashCode(firstname);
+			result += ObjectUtils.nullSafeHashCode(lastname);
+			result += ObjectUtils.nullSafeHashCode(age);
 			return result + ObjectUtils.nullSafeHashCode(id);
 		}
 
@@ -228,7 +346,20 @@ public class RedisKeyValueTemplateTests {
 				return false;
 			}
 
+			if (!ObjectUtils.nullSafeEquals(this.lastname, that.lastname)) {
+				return false;
+			}
+
+			if (!ObjectUtils.nullSafeEquals(this.age, that.age)) {
+				return false;
+			}
+
 			return ObjectUtils.nullSafeEquals(this.id, that.id);
+		}
+
+		@Override
+		public String toString() {
+			return "Person [id=" + id + ", firstname=" + firstname + ", lastname=" + lastname + ", age=" + age + "]";
 		}
 
 	}
