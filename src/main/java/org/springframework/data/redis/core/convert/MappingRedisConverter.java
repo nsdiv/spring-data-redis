@@ -45,9 +45,12 @@ import org.springframework.data.mapping.AssociationHandler;
 import org.springframework.data.mapping.PersistentPropertyAccessor;
 import org.springframework.data.mapping.PreferredConstructor;
 import org.springframework.data.mapping.PropertyHandler;
+import org.springframework.data.mapping.context.PersistentPropertyPath;
 import org.springframework.data.mapping.model.PersistentEntityParameterValueProvider;
 import org.springframework.data.mapping.model.PropertyValueProvider;
-import org.springframework.data.redis.core.index.IndexDefinitionProvider;
+import org.springframework.data.redis.core.PartialUpdate;
+import org.springframework.data.redis.core.PartialUpdate.PropertyUpdate;
+import org.springframework.data.redis.core.PartialUpdate.UpdateCommand;
 import org.springframework.data.redis.core.index.Indexed;
 import org.springframework.data.redis.core.mapping.RedisMappingContext;
 import org.springframework.data.redis.core.mapping.RedisPersistentEntity;
@@ -344,6 +347,11 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 			return;
 		}
 
+		if (source instanceof PartialUpdate) {
+			writePartialUpdate((PartialUpdate) source, sink);
+			return;
+		}
+
 		final RedisPersistentEntity entity = mappingContext.getPersistentEntity(source.getClass());
 
 		if (!customConversions.hasCustomWriteTarget(source.getClass())) {
@@ -362,7 +370,41 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 		for (IndexedData indexeData : indexResolver.resolveIndexesFor(entity.getTypeInformation(), source)) {
 			sink.addIndexedData(indexeData);
 		}
+	}
 
+	protected void writePartialUpdate(PartialUpdate<?> update, RedisData sink) {
+
+		RedisPersistentEntity<?> entity = mappingContext.getPersistentEntity(update.getTarget());
+
+		write(update.getValue(), sink);
+		if (sink.getBucket().keySet().contains("_class")) {
+			sink.getBucket().put("_class", null); // overwrite stuff in here
+		}
+
+		if (update.isRefreshTtl() && !update.getPropertyUpdates().isEmpty()) {
+
+			Long ttl = entity.getTimeToLiveAccessor().getTimeToLive(update);
+			if (ttl != null && ttl > 0) {
+				sink.setTimeToLive(ttl);
+			}
+		}
+
+		for (PropertyUpdate pUpdate : update.getPropertyUpdates()) {
+
+			PersistentPropertyPath<KeyValuePersistentProperty> persistentPropertyPath = mappingContext
+					.getPersistentPropertyPath(pUpdate.getPropertyPath(), update.getTarget());
+
+			if (UpdateCommand.SET.equals(pUpdate.getCmd())) {
+
+				Set<IndexedData> data = indexResolver.resolveIndexesFor(entity.getKeySpace(), pUpdate.getPropertyPath(),
+						persistentPropertyPath.getLeafProperty().getTypeInformation(), pUpdate.getValue());
+
+				writeInternal(entity.getKeySpace(), pUpdate.getPropertyPath(), pUpdate.getValue(),
+						persistentPropertyPath.getLeafProperty().getTypeInformation(), sink);
+
+				sink.addIndexedData(data);
+			}
+		}
 	}
 
 	/**
@@ -754,11 +796,6 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 	@Override
 	public void afterPropertiesSet() {
 		this.initializeConverters();
-	}
-
-	@Override
-	public IndexDefinitionProvider getIndexDefinitionProvider() {
-		return this.mappingContext.getMappingConfiguration().getIndexConfiguration();
 	}
 
 	private void initializeConverters() {

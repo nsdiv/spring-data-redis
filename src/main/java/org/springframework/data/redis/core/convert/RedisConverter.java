@@ -18,7 +18,6 @@ package org.springframework.data.redis.core.convert;
 import org.springframework.data.convert.EntityConverter;
 import org.springframework.data.keyvalue.core.mapping.KeyValuePersistentEntity;
 import org.springframework.data.keyvalue.core.mapping.KeyValuePersistentProperty;
-import org.springframework.data.redis.core.index.IndexDefinitionProvider;
 
 /**
  * Redis specific {@link EntityConverter}.
@@ -26,8 +25,7 @@ import org.springframework.data.redis.core.index.IndexDefinitionProvider;
  * @author Christoph Strobl
  * @since 1.7
  */
-public interface RedisConverter extends
-		EntityConverter<KeyValuePersistentEntity<?>, KeyValuePersistentProperty, Object, RedisData> {
+public interface RedisConverter
+		extends EntityConverter<KeyValuePersistentEntity<?>, KeyValuePersistentProperty, Object, RedisData> {
 
-	IndexDefinitionProvider getIndexDefinitionProvider();
 }

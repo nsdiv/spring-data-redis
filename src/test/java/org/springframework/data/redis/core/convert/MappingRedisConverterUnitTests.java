@@ -54,6 +54,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;
 import org.springframework.data.convert.WritingConverter;
+import org.springframework.data.redis.core.PartialUpdate;
 import org.springframework.data.redis.core.convert.ConversionTestEntities.Address;
 import org.springframework.data.redis.core.convert.ConversionTestEntities.AddressWithId;
 import org.springframework.data.redis.core.convert.ConversionTestEntities.AddressWithPostcode;
@@ -1323,6 +1324,54 @@ public class MappingRedisConverterUnitTests {
 		assertThat(target.species, notNullValue());
 		assertThat(target.species.get(0), notNullValue());
 		assertThat(target.species.get(0).name, is("trolloc"));
+	}
+
+	/**
+	 * @see DATAREDIS-471
+	 */
+	@Test
+	public void writeShouldNotAppendClassTypeHint() {
+
+		Person value = new Person();
+		value.firstname = "rand";
+		value.age = 24;
+
+		PartialUpdate<Person> update = new PartialUpdate<Person>("123", value);
+
+		assertThat(write(update).getBucket().get("_class"), is(nullValue()));
+	}
+
+	/**
+	 * @see DATAREDIS-471
+	 */
+	@Test
+	public void writeShouldWritePartialUpdateValueCorrectly() {
+
+		Person value = new Person();
+		value.firstname = "rand";
+		value.age = 24;
+
+		PartialUpdate<Person> update = new PartialUpdate<Person>("123", value);
+
+		assertThat(write(update).getBucket(),
+				isBucket().containingUtf8String("firstname", "rand").containingUtf8String("age", "24"));
+	}
+
+	/**
+	 * @see DATAREDIS-471
+	 */
+	@Test
+	public void writeShouldWritePartialUpdatePathValueCorrectly() {
+
+		Person value = new Person();
+		value.firstname = "rand";
+		value.age = 24;
+
+		PartialUpdate<Person> update = new PartialUpdate<Person>("123", Person.class).set("firstname", "rand").set("age",
+				24);
+
+		assertThat(write(update).getBucket(),
+				isBucket().containingUtf8String("firstname", "rand").containingUtf8String("age", "24"));
 	}
 
 	private RedisData write(Object source) {

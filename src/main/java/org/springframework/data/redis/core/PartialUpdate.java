@@ -19,6 +19,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
+
 /**
  * @author Christoph Strobl
  * @param <T>
@@ -27,44 +30,79 @@ public class PartialUpdate<T> {
 
 	private final Object id;
 	private final Class<T> target;
-	private T value;
+	private final T value;
 	private boolean refreshTtl = false;
 
 	private final List<PropertyUpdate> propertyUpdates = new ArrayList<PropertyUpdate>();
 
-	public PartialUpdate(Object id, Class<T> type) {
+	private PartialUpdate(Object id, Class<T> target, T value, boolean refreshTtl, List<PropertyUpdate> propertyUpdates) {
 
 		this.id = id;
-		this.target = type;
+		this.target = target;
+		this.value = value;
+		this.refreshTtl = refreshTtl;
+		this.propertyUpdates.addAll(propertyUpdates);
 	}
 
+	/**
+	 * @param id must not be {@literal null}.
+	 * @param target must not be {@literal null}.
+	 */
+	@SuppressWarnings("unchecked")
+	public PartialUpdate(Object id, Class<T> target) {
+
+		Assert.notNull(id, "Id must not be null!");
+		Assert.notNull(target, "Target must not be null!");
+
+		this.id = id;
+		this.target = (Class<T>) ClassUtils.getUserClass(target);
+		this.value = null;
+	}
+
+	/**
+	 * @param id must not be {@literal null}.
+	 * @param value must not be {@literal null}.
+	 */
+	@SuppressWarnings("unchecked")
 	public PartialUpdate(Object id, T value) {
 
+		Assert.notNull(id, "Id must not be null!");
+		Assert.notNull(value, "Value must not be null!");
+
 		this.id = id;
-		this.target = (Class<T>) value.getClass();
+		this.target = (Class<T>) ClassUtils.getUserClass(value.getClass());
 		this.value = value;
 	}
 
-	public void setValue(T value) {
-		this.value = value;
-	}
-
+	/**
+	 * @return can be {@literal null}.
+	 */
 	public T getValue() {
 		return value;
 	}
 
-	public void set(String path, Object value) {
+	public PartialUpdate<T> set(String path, Object value) {
+
 		propertyUpdates.add(new PropertyUpdate(UpdateCommand.SET, path, value));
+		return new PartialUpdate<T>(this.id, this.target, this.value, this.refreshTtl, this.propertyUpdates);
 	}
 
-	public void del(String path) {
-		propertyUpdates.add(new PropertyUpdate(UpdateCommand.DEL, path, null));
+	public PartialUpdate<T> del(String path) {
+
+		propertyUpdates.add(new PropertyUpdate(UpdateCommand.DEL, path));
+		return new PartialUpdate<T>(this.id, this.target, this.value, this.refreshTtl, this.propertyUpdates);
 	}
 
+	/**
+	 * @return never {@literal null}.
+	 */
 	public Class<T> getTarget() {
 		return target;
 	}
 
+	/**
+	 * @return never {@literal null}.
+	 */
 	public Object getId() {
 		return id;
 	}
@@ -77,21 +115,26 @@ public class PartialUpdate<T> {
 		return refreshTtl;
 	}
 
-	public void setRefreshTtl(boolean refreshTtl) {
+	public PartialUpdate<T> refreshTtl(boolean refreshTtl) {
+
 		this.refreshTtl = refreshTtl;
+		return new PartialUpdate<T>(this.id, this.target, this.value, this.refreshTtl, this.propertyUpdates);
 	}
 
-	static enum UpdateCommand {
-		SET, DEL
-	}
-
-	static class PropertyUpdate {
+	/**
+	 * @author Christoph Strobl
+	 */
+	public static class PropertyUpdate {
 
 		private final UpdateCommand cmd;
 		private final String propertyPath;
 		private final Object value;
 
-		public PropertyUpdate(UpdateCommand cmd, String propertyPath, Object value) {
+		private PropertyUpdate(UpdateCommand cmd, String propertyPath) {
+			this(cmd, propertyPath, null);
+		}
+
+		private PropertyUpdate(UpdateCommand cmd, String propertyPath, Object value) {
 
 			this.cmd = cmd;
 			this.propertyPath = propertyPath;
@@ -109,7 +152,13 @@ public class PartialUpdate<T> {
 		public Object getValue() {
 			return value;
 		}
+	}
 
+	/**
+	 * @author Christoph Strobl
+	 */
+	public static enum UpdateCommand {
+		SET, DEL
 	}
 
 }

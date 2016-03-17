@@ -210,13 +210,11 @@ public class RedisKeyValueTemplateTests {
 
 		template.insert(rand);
 
-		PartialUpdate<Person> update = new PartialUpdate<Person>(rand.id, Person.class);
-
 		/*
 		 * Set the lastname and make sure we've an index on it afterwards
 		 */
 		Person update1 = new Person(rand.id, "Rand-Update", "al-thor");
-		update.setValue(update1);
+		PartialUpdate<Person> update = new PartialUpdate<Person>(rand.id, update1);
 
 		assertThat(template.doPartialUpdate(update), is(update1));
 
@@ -235,8 +233,7 @@ public class RedisKeyValueTemplateTests {
 		/*
 		 * Set the firstname and make sure lastname index and value is not affected
 		 */
-		update = new PartialUpdate<Person>(rand.id, Person.class);
-		update.set("firstname", "frodo");
+		update = new PartialUpdate<Person>(rand.id, Person.class).set("firstname", "frodo");
 
 		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, "frodo", "al-thor")));
 
@@ -257,9 +254,9 @@ public class RedisKeyValueTemplateTests {
 		 */
 		update = new PartialUpdate<Person>(rand.id, Person.class);
 		update.del("firstname");
-		update.set("lastname", "buggins");
+		update.set("lastname", "baggins");
 
-		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, null, "buggins")));
+		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, null, "baggins")));
 
 		nativeTemplate.execute(new RedisCallback<Void>() {
 
@@ -267,8 +264,8 @@ public class RedisKeyValueTemplateTests {
 			public Void doInRedis(RedisConnection connection) throws DataAccessException {
 
 				assertThat(connection.exists("template-test-person:lastname:al-thor".getBytes()), is(false));
-				assertThat(connection.exists("template-test-person:lastname:buggins".getBytes()), is(true));
-				assertThat(connection.sIsMember("template-test-person:lastname:buggins".getBytes(), rand.id.getBytes()),
+				assertThat(connection.exists("template-test-person:lastname:baggins".getBytes()), is(true));
+				assertThat(connection.sIsMember("template-test-person:lastname:baggins".getBytes(), rand.id.getBytes()),
 						is(true));
 				return null;
 			}

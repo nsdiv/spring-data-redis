@@ -15,6 +15,7 @@
  */
 package org.springframework.data.redis.core.convert;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -100,6 +101,15 @@ public class RedisData {
 
 		Assert.notNull(index, "IndexedData to add must not be null!");
 		this.indexedData.add(index);
+	}
+
+	/**
+	 * @param index
+	 */
+	public void addIndexedData(Collection<IndexedData> indexs) {
+
+		Assert.notNull(indexs, "IndexedData to add must not be null!");
+		this.indexedData.addAll(indexs);
 	}
 
 	/**

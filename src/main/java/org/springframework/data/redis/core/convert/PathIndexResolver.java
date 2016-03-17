@@ -15,7 +15,6 @@
  */
 package org.springframework.data.redis.core.convert;
 
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -76,6 +75,12 @@ public class PathIndexResolver implements IndexResolver {
 	public Set<IndexedData> resolveIndexesFor(TypeInformation<?> typeInformation, Object value) {
 		return doResolveIndexesFor(mappingContext.getPersistentEntity(typeInformation).getKeySpace(), "", typeInformation,
 				null, value);
+	}
+
+	@Override
+	public Set<IndexedData> resolveIndexesFor(String keyspace, String path, TypeInformation<?> typeInformation,
+			Object value) {
+		return doResolveIndexesFor(keyspace, path, typeInformation, null, value);
 	}
 
 	private Set<IndexedData> doResolveIndexesFor(final String keyspace, final String path,
@@ -158,10 +163,6 @@ public class PathIndexResolver implements IndexResolver {
 	protected Set<IndexedData> resolveIndex(String keyspace, String propertyPath, PersistentProperty<?> property,
 			Object value) {
 
-		if (value == null) {
-			return Collections.emptySet();
-		}
-
 		String path = normalizeIndexPath(propertyPath, property);
 
 		Set<IndexedData> data = new LinkedHashSet<IndexedData>();
@@ -177,8 +178,14 @@ public class PathIndexResolver implements IndexResolver {
 					continue;
 				}
 
-				data.add(new SimpleIndexedPropertyValue(keyspace, indexDefinition.getIndexName(),
-						indexDefinition.valueTransformer().convert(value)));
+				Object transformedValue = indexDefinition.valueTransformer().convert(value);
+
+				IndexedData indexedData = new SimpleIndexedPropertyValue(keyspace, indexDefinition.getIndexName(),
+						transformedValue);
+				if (transformedValue == null) {
+					indexedData = new RemoveIndexedData(indexedData);
+				}
+				data.add(indexedData);
 			}
 		}
 
@@ -189,6 +196,7 @@ public class PathIndexResolver implements IndexResolver {
 
 			data.add(new SimpleIndexedPropertyValue(keyspace, path, indexDefinition.valueTransformer().convert(value)));
 		}
+
 		return data;
 	}
 

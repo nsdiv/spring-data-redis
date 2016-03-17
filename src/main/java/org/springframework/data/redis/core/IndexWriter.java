@@ -21,6 +21,7 @@ import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.convert.IndexedData;
 import org.springframework.data.redis.core.convert.RedisConverter;
+import org.springframework.data.redis.core.convert.RemoveIndexedData;
 import org.springframework.data.redis.core.convert.SimpleIndexedPropertyValue;
 import org.springframework.data.redis.util.ByteUtils;
 import org.springframework.util.Assert;
@@ -123,8 +124,8 @@ class IndexWriter {
 	protected void removeKeyFromExistingIndexes(byte[] key, IndexedData indexedData) {
 
 		Assert.notNull(indexedData, "IndexedData must not be null!");
-		Set<byte[]> existingKeys = connection.keys(toBytes(indexedData.getKeyspace() + ":" + indexedData.getIndexName()
-				+ ":*"));
+		Set<byte[]> existingKeys = connection
+				.keys(toBytes(indexedData.getKeyspace() + ":" + indexedData.getIndexName() + ":*"));
 
 		if (!CollectionUtils.isEmpty(existingKeys)) {
 			for (byte[] existingKey : existingKeys) {
@@ -151,7 +152,11 @@ class IndexWriter {
 		Assert.notNull(key, "Key must not be null!");
 		Assert.notNull(indexedData, "IndexedData must not be null!");
 
-		if (indexedData instanceof SimpleIndexedPropertyValue) {
+		if (indexedData instanceof RemoveIndexedData) {
+			return;
+		}
+
+		else if (indexedData instanceof SimpleIndexedPropertyValue) {
 
 			Object value = ((SimpleIndexedPropertyValue) indexedData).getValue();
 
@@ -166,8 +171,8 @@ class IndexWriter {
 			// keep track of indexes used for the object
 			connection.sAdd(ByteUtils.concatAll(toBytes(indexedData.getKeyspace() + ":"), key, toBytes(":idx")), indexKey);
 		} else {
-			throw new IllegalArgumentException(String.format("Cannot write index data for unknown index type %s",
-					indexedData.getClass()));
+			throw new IllegalArgumentException(
+					String.format("Cannot write index data for unknown index type %s", indexedData.getClass()));
 		}
 	}
 
@@ -185,10 +190,8 @@ class IndexWriter {
 			return converter.getConversionService().convert(source, byte[].class);
 		}
 
-		throw new InvalidDataAccessApiUsageException(
-				String
-						.format(
-								"Cannot convert %s to binary representation for index key generation. Are you missing a Converter? Did you register a non PathBasedRedisIndexDefinition that might apply to a complex type?",
-								source.getClass()));
+		throw new InvalidDataAccessApiUsageException(String.format(
+				"Cannot convert %s to binary representation for index key generation. Are you missing a Converter? Did you register a non PathBasedRedisIndexDefinition that might apply to a complex type?",
+				source.getClass()));
 	}
 }
