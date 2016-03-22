@@ -426,9 +426,15 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 					}
 
 					writeMap(entity.getKeySpace(), pUpdate.getPropertyPath(), targetProperty.getMapValueType(), map, sink);
-				}
+				} else if (targetProperty.isAssociation()) {
 
-				else {
+					KeyValuePersistentEntity<?> ref = mappingContext
+							.getPersistentEntity(targetProperty.getAssociation().getInverse().getTypeInformation());
+
+					Object refId = ref.getPropertyAccessor(pUpdate.getValue()).getProperty(ref.getIdProperty());
+
+					sink.getBucket().put(pUpdate.getPropertyPath(), toBytes(ref.getKeySpace() + ":" + refId));
+				} else {
 
 					writeInternal(entity.getKeySpace(), pUpdate.getPropertyPath(), pUpdate.getValue(),
 							targetProperty.getTypeInformation(), sink);

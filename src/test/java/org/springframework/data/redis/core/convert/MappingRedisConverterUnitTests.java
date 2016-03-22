@@ -1578,6 +1578,45 @@ public class MappingRedisConverterUnitTests {
 		write(update);
 	}
 
+	/**
+	 * @see DATAREDIS-471
+	 */
+	@Test
+	public void writeShouldWritePartialUpdatePathWithRegisteredCustomConversionCorrectly() {
+
+		this.converter = new MappingRedisConverter(null, null, resolverMock);
+		this.converter
+				.setCustomConversions(new CustomConversions(Collections.singletonList(new AddressToBytesConverter())));
+		this.converter.afterPropertiesSet();
+
+		Address address = new Address();
+		address.country = "Tel'aran'rhiod";
+		address.city = "unknown";
+
+		PartialUpdate<Person> update = new PartialUpdate<Person>("123", Person.class).set("address", address);
+
+		assertThat(write(update).getBucket(),
+				isBucket().containingUtf8String("address", "{\"city\":\"unknown\",\"country\":\"Tel'aran'rhiod\"}"));
+	}
+
+	/**
+	 * @see DATAREDIS-425
+	 */
+	@Test
+	public void writeShouldWritePartialUpdatePathWithReferenceCorrectly() {
+
+		Location location = new Location();
+		location.id = "1";
+		location.name = "tar valon";
+
+		PartialUpdate<Person> update = new PartialUpdate<Person>("123", Person.class).set("location", location);
+
+		assertThat(write(update).getBucket(),
+				isBucket().containingUtf8String("location", "locations:1") //
+						.without("location.id") //
+						.without("location.name"));
+	}
+
 	private RedisData write(Object source) {
 
 		RedisData rdo = new RedisData();
