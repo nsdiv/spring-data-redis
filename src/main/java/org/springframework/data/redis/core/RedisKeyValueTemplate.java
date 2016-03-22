@@ -70,6 +70,7 @@ public class RedisKeyValueTemplate extends KeyValueTemplate {
 	 * </code>
 	 * 
 	 * <pre>
+	 * 
 	 * @param callback provides the to retrieve entity ids. Must not be {@literal null}.
 	 * @param type must not be {@literal null}.
 	 * @return empty list if not elements found.
@@ -89,15 +90,14 @@ public class RedisKeyValueTemplate extends KeyValueTemplate {
 					return Collections.emptyList();
 				}
 
-				Iterable<?> ids = ClassUtils.isAssignable(Iterable.class, callbackResult.getClass()) ? (Iterable<?>) callbackResult
-						: Collections.singleton(callbackResult);
+				Iterable<?> ids = ClassUtils.isAssignable(Iterable.class, callbackResult.getClass())
+						? (Iterable<?>) callbackResult : Collections.singleton(callbackResult);
 
 				List<T> result = new ArrayList<T>();
 				for (Object id : ids) {
 
-					String idToUse = adapter.getConverter().getConversionService().canConvert(id.getClass(), String.class) ? adapter
-							.getConverter().getConversionService().convert(id, String.class)
-							: id.toString();
+					String idToUse = adapter.getConverter().getConversionService().canConvert(id.getClass(), String.class)
+							? adapter.getConverter().getConversionService().convert(id, String.class) : id.toString();
 
 					T candidate = findById(idToUse, type);
 					if (candidate != null) {
@@ -118,20 +118,21 @@ public class RedisKeyValueTemplate extends KeyValueTemplate {
 	public void update(Object objectToUpdate) {
 
 		if (objectToUpdate instanceof PartialUpdate) {
-			doPartialUpdate((PartialUpdate<Object>) objectToUpdate);
+			doPartialUpdate((PartialUpdate<?>) objectToUpdate);
 		}
 
 		super.update(objectToUpdate);
 	}
 
-	protected <T> T doPartialUpdate(final PartialUpdate<T> update) {
+	protected void doPartialUpdate(final PartialUpdate<?> update) {
 
-		return execute(new RedisKeyValueCallback<T>() {
+		execute(new RedisKeyValueCallback<Void>() {
 
 			@Override
-			public T doInRedis(RedisKeyValueAdapter adapter) {
+			public Void doInRedis(RedisKeyValueAdapter adapter) {
 
-				return adapter.update(update);
+				adapter.update(update);
+				return null;
 			}
 		});
 	}

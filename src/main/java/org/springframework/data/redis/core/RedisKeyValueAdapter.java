@@ -394,11 +394,9 @@ public class RedisKeyValueAdapter extends AbstractKeyValueAdapter
 		return count != null ? count.longValue() : 0;
 	}
 
-	@SuppressWarnings("unchecked")
-	public <T> T update(final PartialUpdate<T> update) {
+	public void update(final PartialUpdate<?> update) {
 
-		final RedisPersistentEntity<T> entity = (RedisPersistentEntity<T>) this.converter.getMappingContext()
-				.getPersistentEntity(update.getTarget());
+		final RedisPersistentEntity<?> entity = this.converter.getMappingContext().getPersistentEntity(update.getTarget());
 
 		final String keyspace = entity.getKeySpace();
 		final Object id = update.getId();
@@ -471,8 +469,6 @@ public class RedisKeyValueAdapter extends AbstractKeyValueAdapter
 			}
 
 		});
-
-		return get(toBytes(id), keyspace, update.getTarget());
 	}
 
 	/**

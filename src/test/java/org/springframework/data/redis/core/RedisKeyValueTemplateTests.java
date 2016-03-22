@@ -17,6 +17,7 @@ package org.springframework.data.redis.core;
 
 import static org.hamcrest.core.Is.*;
 import static org.hamcrest.core.IsCollectionContaining.*;
+import static org.hamcrest.core.IsEqual.*;
 import static org.junit.Assert.*;
 
 import java.util.Arrays;
@@ -202,6 +203,9 @@ public class RedisKeyValueTemplateTests {
 		assertThat(result.size(), is(0));
 	}
 
+	/**
+	 * @see DATAREDIS-471
+	 */
 	@Test
 	public void partialUpdate() {
 
@@ -213,16 +217,19 @@ public class RedisKeyValueTemplateTests {
 		/*
 		 * Set the lastname and make sure we've an index on it afterwards
 		 */
-		Person update1 = new Person(rand.id, "Rand-Update", "al-thor");
+		Person update1 = new Person(rand.id, null, "al-thor");
 		PartialUpdate<Person> update = new PartialUpdate<Person>(rand.id, update1);
 
-		assertThat(template.doPartialUpdate(update), is(update1));
+		template.doPartialUpdate(update);
 
+		assertThat(template.findById(rand.id, Person.class), is(equalTo(new Person(rand.id, "rand", "al-thor"))));
 		nativeTemplate.execute(new RedisCallback<Void>() {
 
 			@Override
 			public Void doInRedis(RedisConnection connection) throws DataAccessException {
 
+				assertThat(connection.hGet(("template-test-person:" + rand.id).getBytes(), "firstname".getBytes()),
+						is(equalTo("rand".getBytes())));
 				assertThat(connection.exists("template-test-person:lastname:al-thor".getBytes()), is(true));
 				assertThat(connection.sIsMember("template-test-person:lastname:al-thor".getBytes(), rand.id.getBytes()),
 						is(true));
@@ -235,8 +242,9 @@ public class RedisKeyValueTemplateTests {
 		 */
 		update = new PartialUpdate<Person>(rand.id, Person.class).set("firstname", "frodo");
 
-		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, "frodo", "al-thor")));
+		template.doPartialUpdate(update);
 
+		assertThat(template.findById(rand.id, Person.class), is(equalTo(new Person(rand.id, "frodo", "al-thor"))));
 		nativeTemplate.execute(new RedisCallback<Void>() {
 
 			@Override
@@ -256,8 +264,9 @@ public class RedisKeyValueTemplateTests {
 		update.del("firstname");
 		update.set("lastname", "baggins");
 
-		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, null, "baggins")));
+		template.doPartialUpdate(update);
 
+		assertThat(template.findById(rand.id, Person.class), is(equalTo(new Person(rand.id, null, "baggins"))));
 		nativeTemplate.execute(new RedisCallback<Void>() {
 
 			@Override
@@ -277,8 +286,9 @@ public class RedisKeyValueTemplateTests {
 		update = new PartialUpdate<Person>(rand.id, Person.class);
 		update.del("lastname");
 
-		assertThat(template.doPartialUpdate(update), is(new Person(rand.id, null, null)));
+		template.doPartialUpdate(update);
 
+		assertThat(template.findById(rand.id, Person.class), is(equalTo(new Person(rand.id, null, null))));
 		nativeTemplate.execute(new RedisCallback<Void>() {
 
 			@Override
