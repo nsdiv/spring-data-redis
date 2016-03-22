@@ -405,20 +405,46 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 							ClassTypeInformation.OBJECT, sink);
 					continue;
 				}
-				if (targetProperty.isCollectionLike()) {
 
-					Collection<Object> c = pUpdate.getValue() instanceof Collection ? (Collection<Object>) pUpdate.getValue()
+				if (targetProperty.isAssociation()) {
+
+					if (targetProperty.isCollectionLike()) {
+
+						KeyValuePersistentEntity<?> ref = mappingContext.getPersistentEntity(
+								targetProperty.getAssociation().getInverse().getTypeInformation().getComponentType().getActualType());
+
+						int i = 0;
+						for (Object o : (Collection<?>) pUpdate.getValue()) {
+
+							Object refId = ref.getPropertyAccessor(o).getProperty(ref.getIdProperty());
+							sink.getBucket().put(pUpdate.getPropertyPath() + ".[" + i + "]",
+									toBytes(ref.getKeySpace() + ":" + refId));
+							i++;
+						}
+					} else {
+
+						KeyValuePersistentEntity<?> ref = mappingContext
+								.getPersistentEntity(targetProperty.getAssociation().getInverse().getTypeInformation());
+
+						Object refId = ref.getPropertyAccessor(pUpdate.getValue()).getProperty(ref.getIdProperty());
+						sink.getBucket().put(pUpdate.getPropertyPath(), toBytes(ref.getKeySpace() + ":" + refId));
+					}
+				}
+
+				else if (targetProperty.isCollectionLike()) {
+
+					Collection<?> collection = pUpdate.getValue() instanceof Collection ? (Collection<?>) pUpdate.getValue()
 							: Collections.<Object> singleton(pUpdate.getValue());
-					writeCollection(entity.getKeySpace(), pUpdate.getPropertyPath(), c, targetProperty.getTypeInformation(),
-							sink);
+					writeCollection(entity.getKeySpace(), pUpdate.getPropertyPath(), collection,
+							targetProperty.getTypeInformation(), sink);
 				} else if (targetProperty.isMap()) {
 
 					Map<Object, Object> map = new HashMap<Object, Object>();
 
 					if (pUpdate.getValue() instanceof Map) {
-						map.putAll((Map) pUpdate.getValue());
+						map.putAll((Map<?, ?>) pUpdate.getValue());
 					} else if (pUpdate.getValue() instanceof Map.Entry) {
-						map.put(((Map.Entry) pUpdate.getValue()).getKey(), ((Map.Entry) pUpdate.getValue()).getValue());
+						map.put(((Map.Entry<?, ?>) pUpdate.getValue()).getKey(), ((Map.Entry<?, ?>) pUpdate.getValue()).getValue());
 					} else {
 						throw new MappingException(
 								String.format("Cannot set update value for map property '%s' to '%s'. Please use a Map or Map.Entry.",
@@ -426,14 +452,6 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 					}
 
 					writeMap(entity.getKeySpace(), pUpdate.getPropertyPath(), targetProperty.getMapValueType(), map, sink);
-				} else if (targetProperty.isAssociation()) {
-
-					KeyValuePersistentEntity<?> ref = mappingContext
-							.getPersistentEntity(targetProperty.getAssociation().getInverse().getTypeInformation());
-
-					Object refId = ref.getPropertyAccessor(pUpdate.getValue()).getProperty(ref.getIdProperty());
-
-					sink.getBucket().put(pUpdate.getPropertyPath(), toBytes(ref.getKeySpace() + ":" + refId));
 				} else {
 
 					writeInternal(entity.getKeySpace(), pUpdate.getPropertyPath(), pUpdate.getValue(),

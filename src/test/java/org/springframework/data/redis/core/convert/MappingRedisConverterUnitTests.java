@@ -1605,6 +1605,29 @@ public class MappingRedisConverterUnitTests {
 	@Test
 	public void writeShouldWritePartialUpdatePathWithReferenceCorrectly() {
 
+		Location tar = new Location();
+		tar.id = "1";
+		tar.name = "tar valon";
+
+		Location tear = new Location();
+		tear.id = "2";
+		tear.name = "city of tear";
+
+		PartialUpdate<Person> update = new PartialUpdate<Person>("123", Person.class).set("visited",
+				Arrays.asList(tar, tear));
+
+		assertThat(write(update).getBucket(),
+				isBucket().containingUtf8String("visited.[0]", "locations:1").containingUtf8String("visited.[1]", "locations:2") //
+						.without("visited.id") //
+						.without("visited.name"));
+	}
+
+	/**
+	 * @see DATAREDIS-425
+	 */
+	@Test
+	public void writeShouldWritePartialUpdatePathWithListOfReferencesCorrectly() {
+
 		Location location = new Location();
 		location.id = "1";
 		location.name = "tar valon";
