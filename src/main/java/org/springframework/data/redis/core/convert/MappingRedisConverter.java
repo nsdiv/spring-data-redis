@@ -17,6 +17,7 @@ package org.springframework.data.redis.core.convert;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -46,6 +47,7 @@ import org.springframework.data.mapping.PersistentPropertyAccessor;
 import org.springframework.data.mapping.PreferredConstructor;
 import org.springframework.data.mapping.PropertyHandler;
 import org.springframework.data.mapping.context.PersistentPropertyPath;
+import org.springframework.data.mapping.model.MappingException;
 import org.springframework.data.mapping.model.PersistentEntityParameterValueProvider;
 import org.springframework.data.mapping.model.PropertyValueProvider;
 import org.springframework.data.redis.core.PartialUpdate;
@@ -391,20 +393,67 @@ public class MappingRedisConverter implements RedisConverter, InitializingBean {
 
 		for (PropertyUpdate pUpdate : update.getPropertyUpdates()) {
 
-			PersistentPropertyPath<KeyValuePersistentProperty> persistentPropertyPath = mappingContext
-					.getPersistentPropertyPath(pUpdate.getPropertyPath(), update.getTarget());
+			String path = pUpdate.getPropertyPath();
 
 			if (UpdateCommand.SET.equals(pUpdate.getCmd())) {
 
-				Set<IndexedData> data = indexResolver.resolveIndexesFor(entity.getKeySpace(), pUpdate.getPropertyPath(),
-						persistentPropertyPath.getLeafProperty().getTypeInformation(), pUpdate.getValue());
+				KeyValuePersistentProperty targetProperty = getTargetPropertyOrNullForPath(path, update.getTarget());
 
-				writeInternal(entity.getKeySpace(), pUpdate.getPropertyPath(), pUpdate.getValue(),
-						persistentPropertyPath.getLeafProperty().getTypeInformation(), sink);
+				if (targetProperty == null) {
 
-				sink.addIndexedData(data);
+					writeInternal(entity.getKeySpace(), pUpdate.getPropertyPath(), pUpdate.getValue(),
+							ClassTypeInformation.OBJECT, sink);
+					continue;
+				}
+				if (targetProperty.isCollectionLike()) {
+
+					Collection<Object> c = pUpdate.getValue() instanceof Collection ? (Collection<Object>) pUpdate.getValue()
+							: Collections.<Object> singleton(pUpdate.getValue());
+					writeCollection(entity.getKeySpace(), pUpdate.getPropertyPath(), c, targetProperty.getTypeInformation(),
+							sink);
+				} else if (targetProperty.isMap()) {
+
+					Map<Object, Object> map = new HashMap<Object, Object>();
+
+					if (pUpdate.getValue() instanceof Map) {
+						map.putAll((Map) pUpdate.getValue());
+					} else if (pUpdate.getValue() instanceof Map.Entry) {
+						map.put(((Map.Entry) pUpdate.getValue()).getKey(), ((Map.Entry) pUpdate.getValue()).getValue());
+					} else {
+						throw new MappingException(
+								String.format("Cannot set update value for map property '%s' to '%s'. Please use a Map or Map.Entry.",
+										pUpdate.getPropertyPath(), pUpdate.getValue()));
+					}
+
+					writeMap(entity.getKeySpace(), pUpdate.getPropertyPath(), targetProperty.getMapValueType(), map, sink);
+				}
+
+				else {
+
+					writeInternal(entity.getKeySpace(), pUpdate.getPropertyPath(), pUpdate.getValue(),
+							targetProperty.getTypeInformation(), sink);
+
+					Set<IndexedData> data = indexResolver.resolveIndexesFor(entity.getKeySpace(), pUpdate.getPropertyPath(),
+							targetProperty.getTypeInformation(), pUpdate.getValue());
+
+					sink.addIndexedData(data);
+				}
 			}
 		}
+	}
+
+	KeyValuePersistentProperty getTargetPropertyOrNullForPath(String path, Class<?> type) {
+
+		try {
+
+			PersistentPropertyPath<KeyValuePersistentProperty> persistentPropertyPath = mappingContext
+					.getPersistentPropertyPath(path, type);
+			return persistentPropertyPath.getLeafProperty();
+		} catch (Exception e) {
+			// that's just fine
+		}
+
+		return null;
 	}
 
 	/**
